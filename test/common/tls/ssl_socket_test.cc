@@ -395,6 +395,13 @@ public:
 
   const std::string& expectedSni() const { return expected_sni_; }
 
+  TestUtilOptions& setPinnedSystemTime(const SystemTime& time) {
+    pinned_system_time_ = time;
+    return *this;
+  }
+
+  const absl::optional<SystemTime>& pinnedSystemTime() const { return pinned_system_time_; }
+
 private:
   const std::string client_ctx_yaml_;
   const std::string server_ctx_yaml_;
@@ -431,6 +438,7 @@ private:
   std::string not_expected_client_stats_;
   int expected_verify_error_code_{-1};
   std::string expected_sni_;
+  absl::optional<SystemTime> pinned_system_time_;
 };
 
 Network::ListenerPtr createListener(Network::SocketSharedPtr&& socket,
@@ -446,6 +454,9 @@ Network::ListenerPtr createListener(Network::SocketSharedPtr&& socket,
 
 void testUtil(const TestUtilOptions& options) {
   Event::SimulatedTimeSystem time_system;
+  if (options.pinnedSystemTime().has_value()) {
+    time_system.setSystemTime(options.pinnedSystemTime().value());
+  }
 
   Stats::TestUtil::TestStore server_stats_store;
   Api::ApiPtr server_api = Api::createApiForTest(server_stats_store, time_system);
@@ -7548,9 +7559,13 @@ TEST_P(SslSocketTest, TestStaplesOcspResponseSuccess) {
   std::string expected_response =
       TestEnvironment::readFileToStringForTest(TestEnvironment::substitute(ocsp_response_path));
 
+  // Pin time within the OCSP response validity window (2024-10-22 to 2026-10-22).
+  auto within_validity =
+      absl::ToChronoTime(TestUtility::parseTime("2025 06 01", "%Y %m %d"));
   testUtil(test_options.enableOcspStapling()
                .setExpectedOcspResponse(expected_response)
-               .setExpectedServerStats("ssl.ocsp_staple_responses"));
+               .setExpectedServerStats("ssl.ocsp_staple_responses")
+               .setPinnedSystemTime(within_validity));
 }
 
 TEST_P(SslSocketTest, TestNoOcspStapleWhenNotEnabledOnClient) {
@@ -7744,9 +7759,12 @@ TEST_P(SslSocketTest, TestFilterMultipleCertsFilterByOcspPolicyFallbackOnFirst) 
   std::string expected_response =
       TestEnvironment::readFileToStringForTest(TestEnvironment::substitute(ocsp_response_path));
   TestUtilOptions test_options(client_ctx_yaml, server_ctx_yaml, true, version_);
+  auto within_validity =
+      absl::ToChronoTime(TestUtility::parseTime("2025 06 01", "%Y %m %d"));
   testUtil(test_options.enableOcspStapling()
                .setExpectedServerStats("ssl.ocsp_staple_responses")
-               .setExpectedOcspResponse(expected_response));
+               .setExpectedOcspResponse(expected_response)
+               .setPinnedSystemTime(within_validity));
 }
 
 TEST_P(SslSocketTest, TestConnectionFailsOnMultipleCertificatesNonePassOcspPolicy) {

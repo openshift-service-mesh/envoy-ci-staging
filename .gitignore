@@ -23,12 +23,14 @@
 !\.yapfignore
 !\.zuul
 !\.zuul.yaml
+!\.fmf
 
 /bazel-*
 /mobile/bazel-*
 BROWSE
 /build
 /build_*
+/build-dir
 *.bzlc
 /ci/bazel-*
 compile_commands.json

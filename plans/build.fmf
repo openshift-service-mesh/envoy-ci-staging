@@ -1,0 +1,40 @@
+summary: Build openshift-service-mesh envoy on bare metal
+
+prepare:
+  - name: Install dependencies
+    how: shell
+    script: |
+      dnf install -y git dnf-plugins-core
+      dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+      dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin iptables-nft
+      systemctl start docker || {
+          echo "=== docker start failed, collecting diagnostics ==="
+          journalctl -xeu docker.service --no-pager | tail -60
+          getenforce || true
+          echo "=== retrying with SELinux permissive ==="
+          setenforce 0 || true
+          systemctl start docker
+      }
+  - name: System tuning
+    how: shell
+    script: sysctl -w user.max_user_namespaces=15000
+  - name: Create build user
+    how: shell
+    script: |
+      useradd -m builder
+      usermod -aG docker builder
+
+discover:
+  how: shell
+  tests:
+    - name: /build
+      test: |
+        if [[ -n "${TMT_TEST_DATA:-}" ]]; then
+            chmod 777 "${TMT_TEST_DATA}"
+        fi
+        su - builder -c "SOURCE_REPO=${SOURCE_REPO} SOURCE_REF=${SOURCE_REF} TMT_TEST_DATA=${TMT_TEST_DATA:-} bash $(pwd)/build.sh"
+      path: /plans
+      duration: 5h
+
+execute:
+  how: tmt

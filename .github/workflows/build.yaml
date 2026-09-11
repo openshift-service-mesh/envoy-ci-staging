@@ -1,0 +1,170 @@
+---
+name: Proxy build (Testing Farm)
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "PR number"
+        required: true
+        type: string
+      head_sha:
+        description: "PR head SHA to build"
+        required: true
+        type: string
+      base_ref:
+        description: "PR base branch (e.g. master)"
+        required: true
+        type: string
+      source_repo:
+        description: "PR head repo clone URL (github.com HTTPS only)"
+        required: true
+        type: string
+
+concurrency:
+  group: build-pr-${{ inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+      statuses: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            suffix: ""
+            status_name: x86_64 bare metal
+          - arch: aarch64
+            suffix: "-arm64"
+            status_name: arm64 bare metal
+    name: "build (${{ matrix.arch }}, Testing Farm bare metal)"
+    if: matrix.arch != 'aarch64' || inputs.base_ref != 'release-1.24'
+    steps:
+      - name: Validate inputs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          INPUT_PR_NUMBER: ${{ inputs.pr_number }}
+          INPUT_HEAD_SHA: ${{ inputs.head_sha }}
+          INPUT_BASE_REF: ${{ inputs.base_ref }}
+          INPUT_SOURCE_REPO: ${{ inputs.source_repo }}
+        with:
+          script: |
+            const prNumber = parseInt(process.env.INPUT_PR_NUMBER);
+            const headSha = process.env.INPUT_HEAD_SHA;
+            const baseRef = process.env.INPUT_BASE_REF;
+            const sourceRepo = process.env.INPUT_SOURCE_REPO;
+
+            if (isNaN(prNumber) || prNumber <= 0) {
+              core.setFailed(`Invalid pr_number: ${process.env.INPUT_PR_NUMBER}`);
+              return;
+            }
+            if (!/^[0-9a-f]{40}$/.test(headSha)) {
+              core.setFailed(`Invalid head_sha format: ${headSha}`);
+              return;
+            }
+            if (!/^[a-zA-Z0-9_.\-\/]+$/.test(baseRef) || baseRef.includes('..')) {
+              core.setFailed(`Invalid base_ref format: ${baseRef}`);
+              return;
+            }
+            if (!/^https:\/\/github\.com\/[a-zA-Z0-9_.\-]+\/[a-zA-Z0-9_.\-]+\.git$/.test(sourceRepo)) {
+              core.setFailed(`Invalid source_repo (must be a github.com HTTPS URL): ${sourceRepo}`);
+              return;
+            }
+
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber
+            });
+
+            if (pr.head.sha !== headSha) {
+              const compare = await github.rest.repos.compareCommits({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                base: headSha,
+                head: pr.head.sha
+              });
+              if (!['ahead', 'identical'].includes(compare.data.status)) {
+                core.setFailed(`head_sha ${headSha} does not belong to PR #${prNumber} (compare: ${compare.data.status})`);
+                return;
+              }
+              core.warning(`Building ancestor commit ${headSha} (PR HEAD is now ${pr.head.sha})`);
+            }
+
+            if (!pr.head.repo) {
+              const baseCloneUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}.git`;
+              if (sourceRepo !== baseCloneUrl) {
+                core.setFailed(`PR fork appears deleted and source_repo ${sourceRepo} is not the base repo`);
+                return;
+              }
+              core.warning('PR fork deleted or same-repo PR; source_repo matches base repo');
+            } else if (sourceRepo !== pr.head.repo.clone_url) {
+              core.setFailed(`source_repo ${sourceRepo} does not match PR head repo ${pr.head.repo.clone_url}`);
+              return;
+            }
+
+            core.info(`Inputs validated: PR #${prNumber}, SHA ${headSha}`);
+
+      - name: Run build on Testing Farm bare metal
+        id: tf
+        uses: sclorg/testing-farm-as-github-action@230555baceb860aa468d216f1822974836b965d1 # v4
+        with:
+          api_key: ${{ secrets.TESTING_FARM_PUBLIC_API_TOKEN }}
+          api_url: https://api.testing-farm.io/v0.1
+          git_url: https://github.com/openshift-service-mesh/proxy.git
+          git_ref: ${{ inputs.base_ref }}
+          tmt_plan_regex: ^/plans/build$
+          compose: CentOS-Stream-10
+          arch: ${{ matrix.arch }}
+          tmt_hardware: '{"virtualization": {"is-virtualized": false}}'
+          environment_settings: '{"pipeline": {"skip_guest_setup": true}}'
+          variables: "SOURCE_REPO=${{ inputs.source_repo }};SOURCE_REF=${{ inputs.head_sha }}"
+          timeout: 120
+          update_pull_request_status: true
+          pull_request_status_name: ${{ matrix.status_name }}
+          create_issue_comment: false
+          commit_sha: ${{ inputs.head_sha }}
+          pr_number: ${{ inputs.pr_number }}
+
+      - name: Verify single plan executed
+        if: always() && steps.tf.outputs.request_id != ''
+        env:
+          REQUEST_ID: ${{ steps.tf.outputs.request_id }}
+        run: |
+          ARTIFACTS_URL="https://artifacts.dev.testing-farm.io/${REQUEST_ID}"
+          if ! curl -sSL -o results.xml "${ARTIFACTS_URL}/results.xml"; then
+            echo "WARNING: results.xml not available (TF may not have discovered any plans)"
+            exit 0
+          fi
+          PLAN_COUNT=$(grep -c '<testsuite ' results.xml)
+          if [ "${PLAN_COUNT}" -ne 1 ]; then
+            echo "ERROR: expected exactly 1 plan, found ${PLAN_COUNT}:"
+            grep '<testsuite ' results.xml
+            exit 1
+          fi
+
+      - name: Collect build artifact
+        if: success()
+        env:
+          REQUEST_ID: ${{ steps.tf.outputs.request_id }}
+          SOURCE_REF: ${{ inputs.head_sha }}
+          SUFFIX: ${{ matrix.suffix }}
+        run: |
+          ARTIFACTS_URL="https://artifacts.dev.testing-farm.io/${REQUEST_ID}"
+          ARTIFACT="envoy-alpha-${SOURCE_REF}${SUFFIX}.tar.gz"
+          curl -fSL -o results.xml "${ARTIFACTS_URL}/results.xml"
+          TF_PATH=$(grep -oP 'href="\K[^"]+'"${ARTIFACT}"'[^"]*' results.xml | head -1)
+          [[ -z "${TF_PATH}" ]] && { echo "ERROR: ${ARTIFACT} not found in results.xml"; cat results.xml; exit 1; }
+          curl -fSL -o "${ARTIFACT}" "${TF_PATH}"
+
+      - name: Upload build artifact
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: envoy-alpha-${{ inputs.head_sha }}${{ matrix.suffix }}
+          path: envoy-alpha-${{ inputs.head_sha }}${{ matrix.suffix }}.tar.gz
+          retention-days: 7

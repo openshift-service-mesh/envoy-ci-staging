@@ -23,6 +23,7 @@
 !\.yapfignore
 !\.zuul
 !\.zuul.yaml
+!\.fmf
 
 /bazel-*
 /mobile/bazel-*

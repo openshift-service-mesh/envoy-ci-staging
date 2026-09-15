@@ -1,0 +1,17 @@
+summary: Build openshift-service-mesh envoy on bare metal
+
+prepare:
+  - name: Install dependencies
+    how: shell
+    script: dnf install -y git podman
+
+discover:
+  how: shell
+  tests:
+    - name: /build
+      test: bash plans/build.sh
+      path: /
+      duration: 3h
+
+execute:
+  how: tmt

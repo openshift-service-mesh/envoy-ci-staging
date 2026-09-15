@@ -5,13 +5,8 @@ on:
   pull_request_target:
     types: [labeled]
     branches:
-      - master
-      - release-1.31
-      - release-1.30
-      - release-1.28
-      - release-1.27
-      - release-1.26
-      - release-1.24
+      - release/v1.34
+      - release/v1.35
 
 jobs:
   handle-ok-to-test:

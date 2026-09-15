@@ -1,5 +1,5 @@
 ---
-name: Proxy build (Testing Farm)
+name: Envoy build (Testing Farm)
 
 on:
   workflow_dispatch:
@@ -115,7 +115,7 @@ jobs:
         with:
           api_key: ${{ secrets.TESTING_FARM_PUBLIC_API_TOKEN }}
           api_url: https://api.testing-farm.io/v0.1
-          git_url: https://github.com/openshift-service-mesh/proxy.git
+          git_url: https://github.com/openshift-service-mesh/envoy.git
           git_ref: ${{ inputs.base_ref }}
           tmt_plan_regex: ^/plans/build$
           compose: CentOS-Stream-10
@@ -146,25 +146,3 @@ jobs:
             grep '<testsuite ' results.xml
             exit 1
           fi
-
-      - name: Collect build artifact
-        if: success()
-        env:
-          REQUEST_ID: ${{ steps.tf.outputs.request_id }}
-          SOURCE_REF: ${{ inputs.head_sha }}
-          SUFFIX: ${{ matrix.suffix }}
-        run: |
-          ARTIFACTS_URL="https://artifacts.dev.testing-farm.io/${REQUEST_ID}"
-          ARTIFACT="envoy-alpha-${SOURCE_REF}${SUFFIX}.tar.gz"
-          curl -fSL -o results.xml "${ARTIFACTS_URL}/results.xml"
-          TF_PATH=$(grep -oP 'href="\K[^"]+'"${ARTIFACT}"'[^"]*' results.xml | head -1)
-          [[ -z "${TF_PATH}" ]] && { echo "ERROR: ${ARTIFACT} not found in results.xml"; cat results.xml; exit 1; }
-          curl -fSL -o "${ARTIFACT}" "${TF_PATH}"
-
-      - name: Upload build artifact
-        if: success()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: envoy-alpha-${{ inputs.head_sha }}${{ matrix.suffix }}
-          path: envoy-alpha-${{ inputs.head_sha }}${{ matrix.suffix }}.tar.gz
-          retention-days: 7

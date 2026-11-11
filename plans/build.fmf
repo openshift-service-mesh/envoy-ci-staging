@@ -6,12 +6,19 @@ prepare:
     script: |
       dnf install -y git podman podman-docker epel-release
       dnf install -y podman-compose
+  - name: Create build user
+    how: shell
+    script: |
+      useradd -m builder
+      usermod -aG wheel builder
+      echo 'builder ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/builder
+      loginctl enable-linger builder
 
 discover:
   how: shell
   tests:
     - name: /build
-      test: bash build.sh
+      test: su - builder -c "SOURCE_REPO=${SOURCE_REPO} SOURCE_REF=${SOURCE_REF} bash $(pwd)/build.sh"
       path: /plans
       duration: 5h
 

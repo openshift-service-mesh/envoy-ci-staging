@@ -11,8 +11,8 @@ discover:
   how: shell
   tests:
     - name: /build
-      test: cd ${TMT_TREE} && bash plans/build.sh
-      path: /
+      test: bash build.sh
+      path: /plans
       duration: 5h
 
 execute:

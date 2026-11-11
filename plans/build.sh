@@ -17,6 +17,10 @@ mkdir -p build-dir
 chcon -R -t container_file_t "$(pwd)" 2>/dev/null || true
 export SOURCE_DIR="$(pwd)"
 export ENVOY_DOCKER_BUILD_DIR="$(pwd)/build-dir"
+# run_envoy_docker.sh sets USER_UID=$(id -u); on TF guests that's 0 (root),
+# which makes the container's envoybuild user root too — rules_python rejects that.
+export USER_UID=1000
+export USER_GID=1000
 
 rc=0
 ./openssl/run_envoy_docker.sh './ci/do_ci.sh dev //test/...' || rc=$?

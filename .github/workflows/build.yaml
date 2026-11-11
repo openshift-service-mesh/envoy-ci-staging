@@ -20,34 +20,18 @@ on:
         description: "PR head repo clone URL (github.com HTTPS only)"
         required: true
         type: string
-      include_arm64:
-        description: "Also build for aarch64"
-        required: false
-        type: boolean
-        default: true
 
 concurrency:
   group: build-pr-${{ inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
-  build:
+  build-x86_64:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: read
       statuses: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            suffix: ""
-            status_name: x86_64 bare metal
-          - arch: aarch64
-            suffix: "-arm64"
-            status_name: arm64 bare metal
-    name: "build (${{ matrix.arch }}, Testing Farm bare metal)"
-    if: matrix.arch != 'aarch64' || inputs.include_arm64
+    name: "build (x86_64, Testing Farm bare metal)"
     steps:
       - name: Validate inputs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -125,13 +109,13 @@ jobs:
           git_ref: ${{ inputs.base_ref }}
           tmt_plan_regex: ^/plans/build$
           compose: CentOS-Stream-10
-          arch: ${{ matrix.arch }}
+          arch: x86_64
           tmt_hardware: '{"virtualization": {"is-virtualized": false}}'
           environment_settings: '{"pipeline": {"skip_guest_setup": true}}'
           variables: "SOURCE_REPO=${{ inputs.source_repo }};SOURCE_REF=${{ inputs.head_sha }}"
           timeout: 120
           update_pull_request_status: true
-          pull_request_status_name: ${{ matrix.status_name }}
+          pull_request_status_name: x86_64 bare metal
           create_issue_comment: false
           commit_sha: ${{ inputs.head_sha }}
           pr_number: ${{ inputs.pr_number }}

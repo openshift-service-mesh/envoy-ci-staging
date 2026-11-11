@@ -30,6 +30,7 @@
 BROWSE
 /build
 /build_*
+/build-dir
 *.bzlc
 /ci/bazel-*
 compile_commands.json

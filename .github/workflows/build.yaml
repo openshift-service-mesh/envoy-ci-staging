@@ -42,6 +42,9 @@ jobs:
             suffix: "-arm64"
             status_name: arm64 bare metal
     name: "build (${{ matrix.arch }}, Testing Farm bare metal)"
+    # TODO(aarch64): the pinned builder image (openssl/builder-image) is
+    # amd64-only; enable the arm64 leg once a multi-arch image is published.
+    if: matrix.arch != 'aarch64'
     steps:
       - name: Validate inputs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -122,7 +125,9 @@ jobs:
           tmt_hardware: '{"virtualization": {"is-virtualized": false}}'
           environment_settings: '{"pipeline": {"skip_guest_setup": true}}'
           variables: "SOURCE_REPO=${{ inputs.source_repo }};SOURCE_REF=${{ inputs.head_sha }}"
-          timeout: 120
+          # minutes; hard cap on the TF run (the job cancels the TF request
+          # when it is reached). Must stay below the 6h runner job limit.
+          timeout: 300
           update_pull_request_status: true
           pull_request_status_name: ${{ matrix.status_name }}
           create_issue_comment: false

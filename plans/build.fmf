@@ -3,7 +3,9 @@ summary: Build openshift-service-mesh envoy on bare metal
 prepare:
   - name: Install dependencies
     how: shell
-    script: dnf install -y git podman
+    script: |
+      dnf install -y git podman podman-docker epel-release
+      dnf install -y podman-compose
 
 discover:
   how: shell
@@ -11,7 +13,7 @@ discover:
     - name: /build
       test: bash plans/build.sh
       path: /
-      duration: 3h
+      duration: 5h
 
 execute:
   how: tmt

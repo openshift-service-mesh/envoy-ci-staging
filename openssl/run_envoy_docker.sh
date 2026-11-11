@@ -11,6 +11,7 @@ cd "$(dirname "$0")/.."
 export ENVOY_STDLIB=libstdc++
 
 # Tell the upstream run_envoy_docker.sh script to use our builder image
-export ENVOY_BUILD_IMAGE=quay.io/jwendell/envoy-build-ubuntu@sha256:de2689a4c97657764e27050ffbee3c6330a81bf3cd52ede2a4efeff5bce86958
+# (the same pinned image the Testing Farm CI uses, see plans/build.sh)
+export ENVOY_BUILD_IMAGE="$(cat openssl/builder-image)"
 # Hand off to the upstream run_envoy_docker.sh script
 exec ./ci/run_envoy_docker.sh "$@"

@@ -20,6 +20,11 @@ on:
         description: "PR head repo clone URL (github.com HTTPS only)"
         required: true
         type: string
+      include_arm64:
+        description: "Also build for aarch64"
+        required: false
+        type: boolean
+        default: true
 
 concurrency:
   group: build-pr-${{ inputs.pr_number }}
@@ -42,6 +47,7 @@ jobs:
             suffix: "-arm64"
             status_name: arm64 bare metal
     name: "build (${{ matrix.arch }}, Testing Farm bare metal)"
+    if: matrix.arch != 'aarch64' || inputs.include_arm64
     steps:
       - name: Validate inputs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9

@@ -31,20 +31,7 @@ jobs:
     permissions:
       pull-requests: read
       statuses: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: x86_64
-            suffix: ""
-            status_name: x86_64 bare metal
-          - arch: aarch64
-            suffix: "-arm64"
-            status_name: arm64 bare metal
-    name: "build (${{ matrix.arch }}, Testing Farm bare metal)"
-    # TODO(aarch64): the pinned builder image (openssl/builder-image) is
-    # amd64-only; enable the arm64 leg once a multi-arch image is published.
-    if: matrix.arch != 'aarch64'
+    name: "build (x86_64, Testing Farm bare metal)"
     steps:
       - name: Validate inputs
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -121,7 +108,7 @@ jobs:
           git_ref: ${{ inputs.base_ref }}
           tmt_plan_regex: ^/plans/build$
           compose: CentOS-Stream-10
-          arch: ${{ matrix.arch }}
+          arch: x86_64
           tmt_hardware: '{"virtualization": {"is-virtualized": false}}'
           environment_settings: '{"pipeline": {"skip_guest_setup": true}}'
           variables: "SOURCE_REPO=${{ inputs.source_repo }};SOURCE_REF=${{ inputs.head_sha }}"
@@ -129,7 +116,7 @@ jobs:
           # when it is reached). Must stay below the 6h runner job limit.
           timeout: 300
           update_pull_request_status: true
-          pull_request_status_name: ${{ matrix.status_name }}
+          pull_request_status_name: x86_64 bare metal
           create_issue_comment: false
           commit_sha: ${{ inputs.head_sha }}
           pr_number: ${{ inputs.pr_number }}

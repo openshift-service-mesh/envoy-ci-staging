@@ -6,6 +6,9 @@ prepare:
     script: |
       dnf install -y git podman podman-docker epel-release
       dnf install -y podman-compose
+  - name: Disable SELinux
+    how: shell
+    script: setenforce 0
   - name: Create build user
     how: shell
     script: |

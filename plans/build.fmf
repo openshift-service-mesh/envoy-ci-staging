@@ -8,12 +8,20 @@ prepare:
       dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
       dnf install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
       systemctl start docker
+  - name: System tuning
+    how: shell
+    script: sysctl -w user.max_user_namespaces=15000
+  - name: Create build user
+    how: shell
+    script: |
+      useradd -m builder
+      usermod -aG docker builder
 
 discover:
   how: shell
   tests:
     - name: /build
-      test: bash build.sh
+      test: su - builder -c "SOURCE_REPO=${SOURCE_REPO} SOURCE_REF=${SOURCE_REF} bash $(pwd)/build.sh"
       path: /plans
       duration: 5h
 

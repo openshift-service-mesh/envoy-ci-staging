@@ -12,7 +12,6 @@ git clone "${SOURCE_REPO}" envoy-src
 cd envoy-src
 git checkout "${SOURCE_REF}"
 
-sysctl -w user.max_user_namespaces=15000 >/dev/null
 mkdir -p build-dir
 export SOURCE_DIR="$(pwd)"
 export ENVOY_DOCKER_BUILD_DIR="$(pwd)/build-dir"

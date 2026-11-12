@@ -16,6 +16,8 @@ mkdir -p build-dir
 export SOURCE_DIR="$(pwd)"
 export ENVOY_DOCKER_BUILD_DIR="$(pwd)/build-dir"
 
+export BAZEL_BUILD_EXTRA_OPTIONS="--jobs=HOST_CPUS*.6 --local_ram_resources=HOST_RAM*.8"
+
 rc=0
 ./openssl/run_envoy_docker.sh './ci/do_ci.sh dev //test/...' || rc=$?
 

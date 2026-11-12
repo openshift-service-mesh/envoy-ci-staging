@@ -19,7 +19,20 @@ export ENVOY_DOCKER_BUILD_DIR="$(pwd)/build-dir"
 rc=0
 ./openssl/run_envoy_docker.sh './ci/do_ci.sh dev //test/...' || rc=$?
 
-# podman-compose exit-code propagation is unreliable; require the binary.
+# Collect failed test logs for TF artifacts
+if [[ -n "${TMT_TEST_DATA:-}" ]]; then
+    testlogs="${ENVOY_DOCKER_BUILD_DIR}/bazel_root/base/execroot/envoy/bazel-out/k8-fastbuild/testlogs"
+    if [[ -d "${testlogs}" ]]; then
+        mkdir -p "${TMT_TEST_DATA}/testlogs"
+        while IFS= read -r xml; do
+            if grep -q 'failures="[1-9]\|errors="[1-9]' "${xml}" 2>/dev/null; then
+                dir="$(dirname "${xml}")"
+                find "${dir}" -name "test.log" -exec cp --parents {} "${TMT_TEST_DATA}/testlogs/" \;
+            fi
+        done < <(find "${testlogs}" -name "test.xml")
+    fi
+fi
+
 if [[ ${rc} -eq 0 && ! -x bazel-bin/source/exe/envoy-static ]]; then
     echo "ERROR: envoy-static missing despite successful exit" >&2
     rc=1
